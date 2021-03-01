@@ -21,11 +21,8 @@ import {log} from "./DesktopLog";
 import type {DesktopUtils} from "./DesktopUtils"
 import type {DesktopErrorHandler} from "./DesktopErrorHandler"
 import type {DesktopIntegrator} from "./integration/DesktopIntegrator"
-import {getExportDirectoryPath, mailIdToFileName, makeMsgFile, msgFileExists, writeFile} from "./DesktopFileExport"
-import type {Mail} from "../api/entities/tutanota/Mail"
+import {getExportDirectoryPath, makeMsgFile, writeFile} from "./DesktopFileExport"
 import {fileExists} from "./PathUtils"
-import {mapAndFilterNullAsync} from "../api/common/utils/ArrayUtils"
-import path from "path"
 
 /**
  * node-side endpoint for communication between the renderer threads and the node thread
@@ -259,29 +256,21 @@ export class IPC {
 				return !!this._updater
 					? Promise.resolve(this._updater.updateInfo)
 					: Promise.resolve(null)
-			case 'saveBundleAsMsg': {
+			case 'mailToMsg': {
 				const bundle = args[0]
-				const file = await makeMsgFile(bundle)
-				const exportDir = await getExportDirectoryPath(this._dl)
+				return makeMsgFile(bundle)
+			}
+			case 'saveToExportDir': {
+				const file: DataFile = args[0]
+				const exportDir = await getExportDirectoryPath(this._electron.app)
 				return writeFile(exportDir, file)
 			}
-			case 'queryAvailableMsgs': {
-				const mails: Array<Mail> = args[0]
-				// return all mails that havent already been exported
-				return mapAndFilterNullAsync(mails, mail => msgFileExists(mail._id, this._dl)
-					.then(exists => exists ? null : mail))
-			}
-			case 'dragExportedMails': {
-				const ids: Array<IdTuple> = args[0]
-				const getExportPath = async id => path.join(await getExportDirectoryPath(this._dl), mailIdToFileName(id, "msg"))
-				const files = await Promise.all(ids.map(getExportPath))
-				                           .then(files => files.filter(fileExists))
+			case 'startNativeDrag': {
+				const files = args[0].filter(fileExists)
 				const window = this._wm.get(windowId)
-				window && window._browserWindow.webContents.startDrag({
-					files,
+				window && window._browserWindow.webContents.startDrag({					files,
 					icon: this._dragIcon
 				})
-
 				return Promise.resolve()
 			}
 			case 'focusApplicationWindow': {

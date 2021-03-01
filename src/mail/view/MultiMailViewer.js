@@ -17,8 +17,11 @@ import {theme} from "../../gui/theme"
 import type {Mail} from "../../api/entities/tutanota/Mail"
 import {locator} from "../../api/main/MainLocator"
 import type {PosRect} from "../../gui/base/Dropdown"
-import {bundleMails, exportMails, moveMails, promptAndDeleteMails} from "./MailGuiUtils"
+import {moveMails, promptAndDeleteMails} from "./MailGuiUtils"
 import {attachDropdown} from "../../gui/base/DropdownN"
+import {exportMailsInZip} from "../export/Exporter"
+import {makeMailBundle} from "../export/Bundler"
+import {worker} from "../../api/main/WorkerClient"
 
 assertMainOrNode()
 
@@ -113,7 +116,10 @@ export class MultiMailViewer {
 				},
 				{
 					label: "export_action",
-					click: this._actionBarAction((mails) => bundleMails(mails).then(exportMails)),
+					click: this._actionBarAction((mails) => {
+						return Promise.all(mails.map(mail => makeMailBundle(mail, locator.entityClient, worker)))
+						              .then(bundles => exportMailsInZip(bundles))
+					}),
 					icon: () => Icons.Export,
 					type: ButtonType.Dropdown,
 					isVisible: () => env.mode !== Mode.App && !logins.isEnabled(FeatureType.DisableMailExport)

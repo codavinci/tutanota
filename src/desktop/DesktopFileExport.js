@@ -1,14 +1,13 @@
 // @flow
 import path from "path"
 import {legalizeFilenames} from "../api/common/utils/FileUtils"
-import type {ValidExtension} from "./PathUtils"
-import {fileExists, isReservedFilename} from "./PathUtils"
+import {isReservedFilename} from "./PathUtils"
 import {promises as fs} from "fs"
 import type {MailBundle} from "../mail/export/Bundler"
 import {Attachment, Email, MessageEditorFormat} from "oxmsg"
-import {ParsingError} from "../api/common/error/ParsingError"
-import {isValidGeneratedId} from "../api/common/utils/Encoding"
 import type {DesktopDownloadManager} from "./DesktopDownloadManager"
+import {createDataFile} from "../api/common/DataFile"
+import {generateExportFileName} from "../mail/export/Exporter"
 
 const EXPORT_DIR = "export"
 
@@ -23,34 +22,31 @@ export async function getExportDirectoryPath(dl: DesktopDownloadManager): Promis
 }
 
 /**
- * Writes files to a new dir in tmp
  * @param dirPath
  * @param files Array of named content to write to tmp
- * @returns {string} path to the directory in which the files were written
+ * @returns {string} a list of the full paths of the files that were written
  * */
-// TODO The files are no longer being deleted, as we need them to persist in order for the user to be able to presented them
-// in their file explorer of choice. Do we need to set up some hook to delete it all later? or should we just count on the OS
-// to do it's thing
-export async function writeFiles(dirPath: string, files: Array<{name: string, content: Uint8Array}>): Promise<string> {
+export async function writeFiles(dirPath: string, files: Array<DataFile>): Promise<Array<string>> {
 	const legalNames = legalizeFilenames(files.map(f => f.name), isReservedFilename)
 	const legalFiles = files.map(f => ({
-		content: f.content,
+		data: f.data,
 		name: legalNames[f.name].shift()
 	}))
-	for (let file of legalFiles) {
-		await fs.writeFile(path.join(dirPath, file.name), file.content)
-	}
-	return dirPath
+
+	return Promise.all(legalFiles.map(async file => {
+		await fs.writeFile(path.join(dirPath, file.name), file.data)
+		return file.name
+	}))
 }
 
-export async function writeFile(dirPath: string, file: {name: string, content: Uint8Array}): Promise<string> {
+export async function writeFile(dirPath: string, file: DataFile): Promise<string> {
 	const legalName = legalizeFilenames([file.name], isReservedFilename)[file.name][0]
 	const fullPath = path.join(dirPath, legalName)
-	await fs.writeFile(fullPath, file.content)
+	await fs.writeFile(fullPath, file.data)
 	return fullPath
 }
 
-export async function makeMsgFile(bundle: MailBundle): Promise<{name: string, content: Uint8Array}> {
+export async function makeMsgFile(bundle: MailBundle): Promise<DataFile> {
 	const subject = `[Tutanota] ${bundle.subject}`
 	const email = new Email(bundle.isDraft, bundle.isRead)
 		.subject(subject)
@@ -72,26 +68,5 @@ export async function makeMsgFile(bundle: MailBundle): Promise<{name: string, co
 		email.attach(new Attachment(new Uint8Array(attachment.data), attachment.name, attachment.cid || ""))
 	}
 
-	return {name: mailIdToFileName(bundle.mailId, "msg"), content: email.msg()}
-}
-
-
-export async function msgFileExists(id: IdTuple, dl: DesktopDownloadManager): Promise<boolean> {
-	const exportDir = await dl.getTutanotaTempDirectory(EXPORT_DIR)
-
-	// successful call to stat means the file exists. it should be valid because the only reason it's there is because we made it
-	return await fileExists(path.join(exportDir, mailIdToFileName(id, "msg")))
-}
-
-/**
- * Get a suitable filename from a mail id
- * @param id
- * @param extension: file extension without the leading dot
- * @returns {string}
- */
-export function mailIdToFileName(id: IdTuple, extension: ValidExtension): string {
-	if (!isValidGeneratedId(id)) throw new ParsingError(`"${id.toString()}" is not a valid mail ID`)
-
-	// prepend a '$' to any capital letter, so that the output filename will not collide with similar but lowercase filenames
-	return id.join("").replace(/([A-Z])/g, "$$$1") + (extension && `.${extension}`)
+	return createDataFile(generateExportFileName(bundle, "msg"), "application/vnd.ms-outlook", email.msg())
 }
