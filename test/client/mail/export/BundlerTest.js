@@ -2,6 +2,6 @@
 
 import o from "ospec"
 
-o.spec("DesktopFileExport", function () {
+o.spec("Bundler", function () {
 	// TODO
 })
