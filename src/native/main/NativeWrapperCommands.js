@@ -3,6 +3,7 @@ import {Request} from "../../api/common/WorkerProtocol"
 import {getMimeType, getName, getSize} from "../common/FileApp"
 import {CloseEventBusOption, SECOND_MS} from "../../api/common/TutanotaConstants"
 import {nativeApp} from "../common/NativeWrapper"
+import type {AlarmNotification} from "../../api/entities/sys/AlarmNotification"
 
 const createMailEditor = (msg: Request): Promise<void> => {
 	return Promise.all([
@@ -163,18 +164,20 @@ function openCustomer(msg: Request): Promise<void> {
 }
 
 /**
+ * /**
  * this updates the link-reveal on hover when the main thread detects that
- * the hovered url changed
+ * the hovered url changed. Will _not_ update if hovering a in link app (starts with 2nd argument)
  */
 function updateTargetUrl(msg: Request) : Promise<void> {
 	const url = msg.args[0]
+	const appPath = msg.args[1]
 	let linkToolTip = document.getElementById("link-tt")
 	if (!linkToolTip) {
 		linkToolTip = document.createElement("DIV")
 		linkToolTip.id = "link-tt";
 		(document.body: any).appendChild(linkToolTip)
 	}
-	if(url === "") {
+	if (url === "" || url.startsWith(appPath)) {
 		linkToolTip.className = ""
 	} else {
 		linkToolTip.innerText = url

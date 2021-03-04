@@ -1,5 +1,6 @@
 //@flow
 import path from "path"
+import url from "url"
 import {sanitizeFilename} from "../api/common/utils/FileUtils"
 import {neverNull} from "../api/common/utils/Utils"
 import {promises as fs} from "fs"
@@ -8,6 +9,27 @@ import {promises as fs} from "fs"
  * Can be used when you want to ensure only valid file extensions are being provided. feel free to add some
  */
 export type ValidExtension = "msg"
+
+/**
+ * @param pathToConvert absolute Path to a file
+ * @returns {string} file:// URL that can be extended with query parameters and loaded with BrowserWindow.loadURL()
+ */
+export function pathToFileURL(pathToConvert: string): string {
+	pathToConvert = pathToConvert
+		.trim()
+		.split(path.sep)
+		.map((fragment) => encodeURIComponent(fragment))
+		.join("/")
+	const extraSlashForWindows = process.platform === "win32" && pathToConvert !== ''
+		? "/"
+		: ""
+	let urlFromPath = url.format({
+		pathname: extraSlashForWindows + pathToConvert.trim(),
+		protocol: 'file:'
+	})
+
+	return urlFromPath.trim()
+}
 
 /**
  * compares a filename to a list of filenames and finds the first number-suffixed
